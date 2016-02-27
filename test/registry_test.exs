@@ -19,8 +19,11 @@ defmodule KV.RegistryTest do
   test "removes buckets on exit", %{registry: registry} do
     KV.Registry.create(registry, "shopping")
     {:ok, bucket} = KV.Registry.lookup(registry, "shopping")
-
     Agent.stop(bucket)
+  
+    # Do a call to ensure the registry processed the down message
+    _ = KV.Registry.create(registry, "bogus")
+  
     assert KV.Registry.lookup(registry, "shopping") == :error
   end
 
@@ -30,8 +33,12 @@ defmodule KV.RegistryTest do
 
     # Kill the bucket and wait for the notification
     Process.exit(bucket, :shutdown)
-    # assert_receive {:exit, "shopping", ^bucket}
-    :timer.sleep(500)
+
+    ref = Process.monitor(bucket)
+    assert_receive {:DOWN, ^ref, _, _, _}
+
+    # Do a call to ensure the registry processed the DOWN message
+    _ = KV.Registry.create(registry, "bogus")
     assert KV.Registry.lookup(registry, "shopping") == :error
   end
 
